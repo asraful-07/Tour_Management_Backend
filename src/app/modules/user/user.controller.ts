@@ -3,7 +3,6 @@ import { catchAsync } from "../../utils/catchAsync";
 import { UserService } from "./user.service";
 import { sendResponse } from "../../utils/sendResponse";
 import status from "http-status";
-import { IRequestUser } from "../../interface/requestUser.interface";
 
 const createUser = catchAsync(async (req: Request, res: Response) => {
   const payload = req.body;
@@ -40,8 +39,8 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
 
 const getSingleUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const user = req.user as IRequestUser;
-  const users = await UserService.getSingleUser(id as string, user);
+
+  const users = await UserService.getSingleUser(id as string);
   sendResponse(res, {
     statusCode: status.OK,
     success: true,
@@ -53,8 +52,8 @@ const getSingleUser = catchAsync(async (req: Request, res: Response) => {
 const updateUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const payload = req.body;
-  const user = req.user as IRequestUser;
-  const users = await UserService.updateUser(id as string, payload, user);
+
+  const users = await UserService.updateUser(id as string, payload, req.user);
   sendResponse(res, {
     statusCode: status.OK,
     success: true,
@@ -66,8 +65,7 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
 
 const softDeleteUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const user = req.user as IRequestUser;
-  const users = await UserService.softDeleteUser(id as string, user);
+  const users = await UserService.softDeleteUser(id as string, req.user);
   sendResponse(res, {
     statusCode: status.OK,
     success: true,

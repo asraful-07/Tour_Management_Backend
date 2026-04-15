@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
-import { IAuthProvider, IUser } from "./user.interface";
+import { IAuthProvider, IUser, Role } from "./user.interface";
 import { User } from "./user.model";
 import AppError from "../../errorHelpers/AppError";
 import status from "http-status";
-import { generateToken } from "../../utils/jwt";
-import { IRequestUser } from "../../interface/requestUser.interface";
+import { JwtPayload } from "jsonwebtoken";
+import { envVars } from "../../config/envVars";
+import { createUserTokens } from "../../utils/userToken";
 
 const createUser = async (payload: Partial<IUser>) => {
   const { name, email, password, ...rest } = payload;
@@ -39,53 +40,51 @@ const createUser = async (payload: Partial<IUser>) => {
 const loginUser = async (payload: IUser) => {
   const { email, password } = payload;
 
-  const existUser = await User.findOne({ email });
+  const isUserExist = await User.findOne({ email });
 
-  if (!existUser) {
+  if (!isUserExist) {
     throw new AppError(status.BAD_REQUEST, "User Not Found");
   }
   const isPasswordValid = await bcrypt.compare(
     password as string,
-    existUser.password as string,
+    isUserExist.password as string,
   );
 
   if (!isPasswordValid) {
     throw new AppError(status.BAD_REQUEST, "Invalid Password");
   }
 
-  const jwtPayload = {
-    id: existUser._id,
-    name: existUser.name,
-    email: existUser.email,
-    role: existUser.role,
+  //? const jwtPayload = {
+  //?     userId: isUserExist._id,
+  //?     email: isUserExist.email,
+  //?      role: isUserExist.role
+  //? }
+  //? const accessToken = generateToken(jwtPayload, envVars.JWT_ACCESS_SECRET, envVars.JWT_ACCESS_EXPIRES)
+  //? const refreshToken = generateToken(jwtPayload, envVars.JWT_REFRESH_SECRET, envVars.JWT_REFRESH_EXPIRES)
+
+  const userTokens = createUserTokens(isUserExist);
+
+  const { ...rest } = isUserExist.toObject();
+
+  return {
+    accessToken: userTokens.accessToken,
+    refreshToken: userTokens.refreshToken,
+    user: rest,
   };
-
-  const accessToken = generateToken(
-    jwtPayload,
-    process.env.JWT_ACCESS_SECRET as string,
-    process.env.JWT_ACCESS_EXPIRES as string,
-  );
-
-  return { user: existUser, accessToken };
 };
 
 const getAllUsers = async () => {
-  const users = await User.find();
-  return users;
+  const users = await User.find({});
+  const totalUsers = await User.countDocuments();
+  return {
+    data: users,
+    meta: {
+      total: totalUsers,
+    },
+  };
 };
 
-const getSingleUser = async (id: string, user: IRequestUser) => {
-  if (
-    id !== user.userId &&
-    !user.role.includes("SUPER_ADMIN") &&
-    !user.role.includes("ADMIN")
-  ) {
-    throw new AppError(
-      status.FORBIDDEN,
-      "You are not allowed to access this user",
-    );
-  }
-
+const getSingleUser = async (id: string) => {
   const result = await User.findById(id);
 
   if (!result) {
@@ -95,48 +94,65 @@ const getSingleUser = async (id: string, user: IRequestUser) => {
 };
 
 const updateUser = async (
-  id: string,
+  userId: string,
   payload: Partial<IUser>,
-  user: IRequestUser,
+  decodedToken: JwtPayload,
 ) => {
-  if (
-    id !== user.userId &&
-    !user.role.includes("SUPER_ADMIN") &&
-    !user.role.includes("ADMIN")
-  ) {
-    throw new AppError(
-      status.FORBIDDEN,
-      "You are not allowed to update this user",
-    );
-  }
+  const ifUserExist = await User.findById(userId);
 
-  const result = await User.findByIdAndUpdate(id, payload, { new: true });
-
-  if (!result) {
+  if (!ifUserExist) {
     throw new AppError(status.NOT_FOUND, "User Not Found");
   }
-  return result;
-};
 
-const softDeleteUser = async (id: string, user: IRequestUser) => {
-  if (!user.role.includes("SUPER_ADMIN")) {
-    throw new AppError(
-      status.FORBIDDEN,
-      "You are not allowed to delete this user",
+  if (payload.role) {
+    if (decodedToken.role === Role.USER || decodedToken.role === Role.GUIDE) {
+      throw new AppError(status.FORBIDDEN, "You are not authorized");
+    }
+
+    if (payload.role === Role.SUPER_ADMIN && decodedToken.role === Role.ADMIN) {
+      throw new AppError(status.FORBIDDEN, "You are not authorized");
+    }
+  }
+
+  if (payload.isActive || payload.isDeleted || payload.isVerified) {
+    if (decodedToken.role === Role.USER || decodedToken.role === Role.GUIDE) {
+      throw new AppError(status.FORBIDDEN, "You are not authorized");
+    }
+  }
+
+  if (payload.password) {
+    payload.password = await bcrypt.hash(
+      payload.password,
+      envVars.BCRYPT_SALT_ROUND as unknown as number,
     );
   }
 
-  const result = await User.findByIdAndUpdate(
-    id,
+  const newUpdatedUser = await User.findByIdAndUpdate(userId, payload, {
+    new: true,
+    runValidators: true,
+  });
+
+  return newUpdatedUser;
+};
+
+const softDeleteUser = async (userId: string, decodedToken: JwtPayload) => {
+  const ifUserExist = await User.findById(userId);
+
+  if (!ifUserExist) {
+    throw new AppError(status.NOT_FOUND, "User Not Found");
+  }
+
+  if (decodedToken.role === Role.USER || decodedToken.role === Role.GUIDE) {
+    throw new AppError(status.FORBIDDEN, "You are not authorized");
+  }
+
+  const deletedUser = await User.findByIdAndUpdate(
+    userId,
     { isDeleted: true },
     { new: true },
   );
 
-  if (!result) {
-    throw new AppError(status.NOT_FOUND, "User Not Found");
-  }
-
-  return result;
+  return deletedUser;
 };
 
 export const UserService = {
