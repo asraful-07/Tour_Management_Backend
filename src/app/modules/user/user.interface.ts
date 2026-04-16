@@ -25,15 +25,16 @@ export enum IsActive {
 }
 
 export interface IUser {
+  _id: Types.ObjectId;
   name: string;
   email: string;
   password?: string;
   phone?: string;
   picture?: string;
   address?: string;
-  isDeleted?: string;
+  isDeleted?: boolean;
   isActive?: IsActive;
-  isVerified?: string;
+  isVerified?: boolean;
   role: Role;
   auths: IAuthProvider[];
   bookings?: Types.ObjectId[];

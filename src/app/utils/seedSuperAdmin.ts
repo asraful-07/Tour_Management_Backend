@@ -4,6 +4,8 @@ import { envVars } from "../config/envVars";
 import { IAuthProvider, IUser, Role } from "../modules/user/user.interface";
 import { User } from "../modules/user/user.model";
 
+type IUserCreate = Omit<IUser, "_id">;
+
 export const seedSuperAdmin = async () => {
   try {
     const isSuperAdminExist = await User.findOne({
@@ -27,12 +29,12 @@ export const seedSuperAdmin = async () => {
       providerId: envVars.SUPER_ADMIN_EMAIL as string,
     };
 
-    const payload: IUser = {
+    const payload: IUserCreate = {
       name: "Super admin",
       role: Role.SUPER_ADMIN,
       email: envVars.SUPER_ADMIN_EMAIL as string,
       password: hashedPassword,
-      // isVerified: true,
+      isVerified: true,
       auths: [authProvider],
     };
 

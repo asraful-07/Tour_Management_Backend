@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
+import AppError from "../../errorHelpers/AppError";
 import { UserService } from "./user.service";
 import { sendResponse } from "../../utils/sendResponse";
 import status from "http-status";
@@ -52,20 +53,34 @@ const getSingleUser = catchAsync(async (req: Request, res: Response) => {
 const updateUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const payload = req.body;
+  const decodedToken = req.user;
 
-  const users = await UserService.updateUser(id as string, payload, req.user);
+  if (!decodedToken) {
+    throw new AppError(status.UNAUTHORIZED, "Unauthorized");
+  }
+
+  const users = await UserService.updateUser(
+    id as string,
+    payload,
+    decodedToken,
+  );
   sendResponse(res, {
     statusCode: status.OK,
     success: true,
     message: "User updated successfully",
-
     data: users,
   });
 });
 
 const softDeleteUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const users = await UserService.softDeleteUser(id as string, req.user);
+  const decodedToken = req.user;
+
+  if (!decodedToken) {
+    throw new AppError(status.UNAUTHORIZED, "Unauthorized");
+  }
+
+  const users = await UserService.softDeleteUser(id as string, decodedToken);
   sendResponse(res, {
     statusCode: status.OK,
     success: true,
