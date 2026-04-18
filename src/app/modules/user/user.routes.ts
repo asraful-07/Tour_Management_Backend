@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { UserController } from "./user.controller";
 import { validateRequest } from "../../middleware/validateRequest";
-import { createUserZodSchema } from "./user.validation";
+import { createUserZodSchema, updateUserZodSchema } from "./user.validation";
 import { checkAuth } from "../../middleware/checkAuth";
 import { Role } from "./user.interface";
 
@@ -13,15 +13,20 @@ router.post(
   UserController.createUser,
 );
 router.post("/login", UserController.loginUser);
-router.get("/", checkAuth(Role.USER), UserController.getAllUsers);
+router.get(
+  "/all-users",
+  checkAuth(Role.ADMIN, Role.SUPER_ADMIN),
+  UserController.getAllUsers,
+);
 router.get(
   "/:id",
-  checkAuth(Role.USER, Role.SUPER_ADMIN, Role.ADMIN, Role.GUIDE),
+  checkAuth(...Object.values(Role)),
   UserController.getSingleUser,
 );
-router.put(
+router.patch(
   "/:id",
-  checkAuth(Role.USER, Role.SUPER_ADMIN, Role.ADMIN, Role.GUIDE),
+  validateRequest(updateUserZodSchema),
+  checkAuth(...Object.values(Role)),
   UserController.updateUser,
 );
 router.delete(
