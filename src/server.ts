@@ -3,6 +3,7 @@ import { Server } from "http";
 import mongoose from "mongoose";
 import app from "./app";
 import { envVars } from "./app/config/envVars";
+import { connectRedis } from "./app/config/redis";
 
 let server: Server;
 
@@ -19,6 +20,8 @@ const startServer = async () => {
     console.log(error);
   }
 };
+
+await connectRedis();
 
 startServer();
 
