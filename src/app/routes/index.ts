@@ -5,6 +5,8 @@ import { DivisionRoutes } from "../modules/division/division.routes";
 import { TourRoutes } from "../modules/tour/tour.routes";
 import { BookingRoutes } from "../modules/booking/booking.routes";
 import { PaymentRoutes } from "../modules/payment/payment.routes";
+import { OtpRoutes } from "../modules/otp/otp.route";
+import { StatsRoutes } from "../modules/stats/stats.route";
 
 const router = Router();
 
@@ -14,5 +16,7 @@ router.use("/division", DivisionRoutes);
 router.use("/tour", TourRoutes);
 router.use("/booking", BookingRoutes);
 router.use("/payment", PaymentRoutes);
+router.use("/otp", OtpRoutes);
+router.use("/stats", StatsRoutes);
 
 export const IndexRoutes = router;

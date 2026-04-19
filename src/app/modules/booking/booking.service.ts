@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from "http-status-codes";
 import AppError from "../../errorHelpers/AppError";
@@ -8,14 +9,9 @@ import { ISSLCommerz } from "../sslCommerz/sslCommerz.interface";
 import { SSLService } from "../sslCommerz/sslCommerz.service";
 import { Tour } from "../tour/tour.model";
 import { User } from "../user/user.model";
+import { Role } from "../user/user.interface";
 import { BOOKING_STATUS, IBooking } from "./booking.interface";
 import { Booking } from "./booking.model";
-
-/**
- * Duplicate DB Collections / replica
- *
- * Relica DB -> [ Create Booking -> Create Payment ->  Update Booking -> Error] -> Real DB
- */
 
 const createBooking = async (payload: Partial<IBooking>, userId: string) => {
   const transactionId = getTransactionId();
@@ -101,29 +97,112 @@ const createBooking = async (payload: Partial<IBooking>, userId: string) => {
   } catch (error) {
     await session.abortTransaction(); // rollback
     session.endSession();
-    // throw new AppError(httpStatus.BAD_REQUEST, error) ❌❌
+    // throw new AppError(httpStatus.BAD_REQUEST, error)
     throw error;
   }
 };
 
-// Frontend(localhost:5173) - User - Tour - Booking (Pending) - Payment(Unpaid) -> SSLCommerz Page -> Payment Complete -> Backend(localhost:5000/api/v1/payment/success) -> Update Payment(PAID) & Booking(CONFIRM) -> redirect to frontend -> Frontend(localhost:5173/payment/success)
+const getAllBookings = async (query: Record<string, unknown>) => {
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 10;
+  const skip = (page - 1) * limit;
 
-// Frontend(localhost:5173) - User - Tour - Booking (Pending) - Payment(Unpaid) -> SSLCommerz Page -> Payment Fail / Cancel -> Backend(localhost:5000) -> Update Payment(FAIL / CANCEL) & Booking(FAIL / CANCEL) -> redirect to frontend -> Frontend(localhost:5173/payment/cancel or localhost:5173/payment/fail)
+  const filter: Record<string, unknown> = {};
+  if (query.status) filter.status = query.status;
 
-const getUserBookings = async () => {
-  return {};
+  const [data, total] = await Promise.all([
+    Booking.find(filter)
+      .populate("user", "name email phone")
+      .populate("tour", "title costFrom")
+      .populate("payment")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Booking.countDocuments(filter),
+  ]);
+
+  return {
+    data,
+    meta: {
+      total,
+      page,
+      limit,
+      totalPage: Math.ceil(total / limit),
+    },
+  };
 };
 
-const getBookingById = async () => {
-  return {};
+// ─── Get Logged-in User's Bookings ────────────────────────────────────────────
+
+const getUserBookings = async (userId: string) => {
+  const bookings = await Booking.find({ user: userId })
+    .populate("tour", "title costFrom images")
+    .populate("payment")
+    .sort({ createdAt: -1 });
+
+  return bookings;
 };
 
-const updateBookingStatus = async () => {
-  return {};
+// ─── Get Single Booking ───────────────────────────────────────────────────────
+
+const getBookingById = async (
+  bookingId: string,
+  userId: string,
+  role: string,
+) => {
+  const booking = await Booking.findById(bookingId)
+    .populate("user", "name email phone address")
+    .populate("tour", "title costFrom")
+    .populate("payment");
+
+  if (!booking) {
+    throw new AppError(httpStatus.NOT_FOUND, "Booking not found.");
+  }
+
+  // Regular users can only view their own bookings
+  const isOwner = (booking.user as any)._id.toString() === userId;
+  const isAdmin = role === Role.ADMIN || role === Role.SUPER_ADMIN;
+
+  if (!isOwner && !isAdmin) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You are not authorized to view this booking.",
+    );
+  }
+
+  return booking;
 };
 
-const getAllBookings = async () => {
-  return {};
+// ─── Update Booking Status ────────────────────────────────────────────────────
+
+const updateBookingStatus = async (
+  bookingId: string,
+  status: BOOKING_STATUS,
+) => {
+  const booking = await Booking.findById(bookingId);
+
+  if (!booking) {
+    throw new AppError(httpStatus.NOT_FOUND, "Booking not found.");
+  }
+
+  // Prevent invalid status transitions
+  if (booking.status === BOOKING_STATUS.COMPLETE) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Cannot change status of a completed booking.",
+    );
+  }
+
+  const updated = await Booking.findByIdAndUpdate(
+    bookingId,
+    { status },
+    { new: true, runValidators: true },
+  )
+    .populate("user", "name email phone")
+    .populate("tour", "title costFrom")
+    .populate("payment");
+
+  return updated;
 };
 
 export const BookingService = {

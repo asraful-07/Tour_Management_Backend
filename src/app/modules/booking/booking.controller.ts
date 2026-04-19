@@ -19,7 +19,10 @@ const createBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getUserBookings = catchAsync(async (req: Request, res: Response) => {
-  const bookings = await BookingService.getUserBookings();
+  const decodeToken = req.user as JwtPayload;
+
+  const bookings = await BookingService.getUserBookings(decodeToken.userId);
+
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -27,8 +30,17 @@ const getUserBookings = catchAsync(async (req: Request, res: Response) => {
     data: bookings,
   });
 });
+
 const getSingleBooking = catchAsync(async (req: Request, res: Response) => {
-  const booking = await BookingService.getBookingById();
+  const decodeToken = req.user as JwtPayload;
+  const { bookingId } = req.params;
+
+  const booking = await BookingService.getBookingById(
+    bookingId as string,
+    decodeToken.userId,
+    decodeToken.role,
+  );
+
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -38,23 +50,29 @@ const getSingleBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const bookings = await BookingService.getAllBookings();
+  const bookings = await BookingService.getAllBookings(req.query);
+
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: "Bookings retrieved successfully",
-    data: {},
-    // meta: {},
+    message: "All bookings retrieved successfully",
+    data: bookings.data,
+    meta: bookings.meta,
   });
 });
 
 const updateBookingStatus = catchAsync(async (req: Request, res: Response) => {
-  const updated = await BookingService.updateBookingStatus();
+  const { bookingId } = req.params;
+
+  const updated = await BookingService.updateBookingStatus(
+    bookingId as string,
+    req.body.status,
+  );
+
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: "Booking Status Updated Successfully",
+    message: "Booking status updated successfully",
     data: updated,
   });
 });

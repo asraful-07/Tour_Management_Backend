@@ -1,9 +1,11 @@
-import { Request, Response } from "express";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { NextFunction, Request, Response } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import AppError from "../../errorHelpers/AppError";
 import { UserService } from "./user.service";
 import { sendResponse } from "../../utils/sendResponse";
 import status from "http-status";
+import { JwtPayload } from "jsonwebtoken";
 
 const createUser = catchAsync(async (req: Request, res: Response) => {
   const payload = req.body;
@@ -39,6 +41,19 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
     data: users,
   });
 });
+
+const getMe = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = req.user as JwtPayload;
+    const result = await UserService.getMe(decodedToken.userId);
+    sendResponse(res, {
+      success: true,
+      statusCode: status.CREATED,
+      message: "Your profile Retrieved Successfully",
+      data: result.data,
+    });
+  },
+);
 
 const getSingleUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -95,6 +110,7 @@ export const UserController = {
   createUser,
   loginUser,
   getAllUsers,
+  getMe,
   getSingleUser,
   updateUser,
   softDeleteUser,
